@@ -8,6 +8,8 @@ import in.co.page_replacement.ll.singly.SinglyLinkedCache;
 public class CacheTester {
 
   static {
+    System.setProperty("log4j.configurationFactory",
+        "org.apache.logging.log4j.core.config.json.JsonConfigurationFactory");
     System.setProperty("log4j.configurationFile", "log4j2.json");
   }
 
