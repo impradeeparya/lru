@@ -1,25 +1,35 @@
-package in.co.page_replacement.ll.doubly;
+package in.co.page_replacement.thread_safe;
+
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class DoublyLinkedCache {
+import in.co.page_replacement.ll.doubly.Node;
 
-  private final Logger LOGGER = LogManager.getLogger(DoublyLinkedCache.class);
+public class ThreadSafeCache {
+
+  private final Logger LOGGER = LogManager.getLogger(ThreadSafeCache.class);
 
   private Node head;
-  private final int MAX_SIZE = 7;
+  private final int MAX_SIZE = 20;
+  private final ReadWriteLock readWriteLock;
+  private final Lock readLock;
+  private final Lock writeLock;
 
-  public DoublyLinkedCache() {}
+  public ThreadSafeCache() {
+    this.readWriteLock = new ReentrantReadWriteLock(true);
+    this.readLock = readWriteLock.readLock();
+    this.writeLock = readWriteLock.writeLock();
+  }
 
   public Node addToHead(Node node) {
 
     if (this.head == null) {
       this.head = node;
     } else {
-      if (isCacheFull()) {
-        removeLru();
-      }
       this.head.setPrevious(node);
       node.setNext(this.head);
       node.setPrevious(null);
@@ -29,15 +39,20 @@ public class DoublyLinkedCache {
   }
 
   private void removeLru() {
-    if (this.head != null) {
-      Node node = this.head;
-      while (node.getNext() != null) {
-        node = node.getNext();
+    try {
+      writeLock.lock();
+      if (this.head != null) {
+        Node node = this.head;
+        while (node.getNext() != null) {
+          node = node.getNext();
+        }
+        Node prevNode = node.getPrevious();
+        if (prevNode != null)
+          prevNode.setNext(null);
+        LOGGER.info("removing {} from cache", node.getData());
       }
-      Node prevNode = node.getPrevious();
-      if (prevNode != null)
-        prevNode.setNext(null);
-      LOGGER.info("removing {} from cache", node.getData());
+    } finally {
+      writeLock.unlock();
     }
   }
 
@@ -82,6 +97,9 @@ public class DoublyLinkedCache {
         String memoryValue = fetchFromMemory(value);
         if (memoryValue != null) {
           Node newNode = new Node().setData(memoryValue);
+          if (isCacheFull()) {
+            removeLru();
+          }
           addToHead(newNode);
           node = newNode;
         }
@@ -90,6 +108,9 @@ public class DoublyLinkedCache {
       String memoryValue = fetchFromMemory(value);
       if (memoryValue != null) {
         Node newNode = new Node().setData(memoryValue);
+        if (isCacheFull()) {
+          removeLru();
+        }
         addToHead(newNode);
         node = newNode;
       }
